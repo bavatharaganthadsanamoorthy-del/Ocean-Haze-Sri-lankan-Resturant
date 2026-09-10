@@ -128,7 +128,7 @@
   .of textarea{resize:vertical;min-height:60px;}
   .fr{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;}
   .pob{background:linear-gradient(135deg,var(--or),var(--gold));border:none;color:#0a0800;padding:.9rem;font-family:'Josefin Sans',sans-serif;font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;cursor:pointer;transition:all .3s;margin-top:.3rem;box-shadow:0 4px 22px rgba(212,160,23,.28);}
-  .pob:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,160,23,.48);}
+  .pob:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(212,160,23,.48);}.pob:disabled{opacity:.6;cursor:not-allowed;transform:none;}
   .ec{text-align:center;padding:3rem 0;color:var(--tm);font-size:.82rem;}
   .eci{font-size:2.5rem;display:block;margin-bottom:1rem;}
   /* SUCCESS */
@@ -368,16 +368,63 @@ function renderCart(){
   f.style.display='block';
 }
 function chQty(id,d){const idx=cart.findIndex(i=>i.id===id);cart[idx].qty+=d;if(cart[idx].qty<=0)cart.splice(idx,1);updateCC();renderCart();}
-function placeOrder(){
+async function placeOrder(){
   const name=document.getElementById('custName').value.trim();
   const phone=document.getElementById('custPhone').value.trim();
-  if(!name||!phone){showToast('⚠️ Please enter name and phone');return;}
-  if(!cart.length){showToast('⚠️ Cart is empty');return;}
-  const order={id:'OH-'+Date.now().toString().slice(-6),name,phone,type:document.getElementById('orderType').value,table:document.getElementById('custTable').value.trim(),notes:document.getElementById('custNotes').value.trim(),items:[...cart],total:cart.reduce((s,i)=>s+i.price*i.qty,0),status:'new',time:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),date:new Date().toLocaleDateString('en-GB')};
-  const orders=JSON.parse(localStorage.getItem('oceanHazeOrders')||'[]');orders.unshift(order);localStorage.setItem('oceanHazeOrders',JSON.stringify(orders));
-  cart=[];updateCC();closeCart();
-  document.getElementById('orderRef').textContent='Order ref: '+order.id;
-  document.getElementById('sOver').classList.add('open');
+
+  if(!name||!phone){
+    showToast('⚠️ Please enter name and phone');
+    return;
+  }
+
+  if(!cart.length){
+    showToast('⚠️ Cart is empty');
+    return;
+  }
+
+  const now=new Date();
+
+  const order={
+    id:'OH-'+Date.now().toString().slice(-6),
+    name,
+    phone,
+    type:document.getElementById('orderType').value,
+    table_number:document.getElementById('custTable').value.trim(),
+    notes:document.getElementById('custNotes').value.trim(),
+    items:[...cart],
+    total:cart.reduce((s,i)=>s+i.price*i.qty,0),
+    status:'new',
+    order_time:now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+    order_date:now.toLocaleDateString('en-GB')
+  };
+
+  const button=document.querySelector('.pob');
+  if(button) button.disabled=true;
+
+  try{
+    const {error}=await supabaseClient
+      .from('orders')
+      .insert([order]);
+
+    if(error) throw error;
+
+    cart=[];
+    updateCC();
+    closeCart();
+
+    document.getElementById('custName').value='';
+    document.getElementById('custPhone').value='';
+    document.getElementById('custTable').value='';
+    document.getElementById('custNotes').value='';
+
+    document.getElementById('orderRef').textContent='Order ref: '+order.id;
+    document.getElementById('sOver').classList.add('open');
+  }catch(error){
+    console.error('Order submission failed:',error);
+    showToast('❌ Could not send order. Please try again.');
+  }finally{
+    if(button) button.disabled=false;
+  }
 }
 function closeSuc(){document.getElementById('sOver').classList.remove('open');showPage('menu');}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);}
